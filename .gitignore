@@ -1,0 +1,5 @@
+*.log
+main
+xdump_config
+*.dat
+.DS_Store
