@@ -1,8 +1,11 @@
 # aogra rtc sdk
 
+
+
 包了一层，原始 sdk 地址：
 
 > [Agora-Golang-Server-SDK](https://github.com/AgoraIO-Extensions/Agora-Golang-Server-SDK)
+> 系统： linux x64 或 mac os (m系列芯片，英特尔芯片未测试)
 
 ## 开发
 
