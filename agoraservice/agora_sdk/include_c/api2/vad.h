@@ -10,7 +10,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define AGORA_UAP_VAD_VERSION (20240208)
+#define AGORA_UAP_VAD_VERSION (20240708)
+
+enum VAD_STATE {
+    VAD_STATE_NONE_SPEAKING = 0,
+    VAD_STATE_START_SPEAKING = 1,
+    VAD_STATE_SPEAKING = 2,
+    VAD_STATE_STOP_SPEAKING = 3,
+};
 
 typedef struct Vad_Config_ {
   int fftSz;  // fft-size, only support: 128, 256, 512, 1024, default value is 1024
@@ -22,8 +29,9 @@ typedef struct Vad_Config_ {
   float rmsThr; // rms threshold in dB, default value is -40.0
   float jointThr; // joint threshold in dB, default value is 0.0
   float aggressive; // aggressive factor, greater value means more aggressive, default value is 5.0
-  int startRecognizeCount; // start recognize count, buffer size for 40ms 16KHz 16bit 1channel PCM, default value is 8
-  int maxRecognizeCount; // max recognize count, buffer size for 40ms 16KHz 16bit 1channel PCM, default value is 20
+  int startRecognizeCount; // start recognize count, buffer size for 10ms 16KHz 16bit 1channel PCM, default value is 10
+  int stopRecognizeCount; // max recognize count, buffer size for 10ms 16KHz 16bit 1channel PCM, default value is 6
+  int preStartRecognizeCount; // pre start recognize count, buffer size for 10ms 16KHz 16bit 1channel PCM, default value is 10
   float activePercent; // active percent, if over this percent, will be recognized as speaking, default value is 0.6
   float inactivePercent; // inactive percent, if below this percent, will be recognized as non-speaking, default value is 0.2
 } Vad_Config;
@@ -85,7 +93,7 @@ int Agora_UAP_VAD_Destroy(void** stPtr);
  * Return value         :  0 - Ok
  *                        -1 - Error
  */
-int Agora_UAP_VAD_Proc(void* stPtr, const Vad_AudioData* pIn, Vad_AudioData* pOut);
+int Agora_UAP_VAD_Proc(void* stPtr, const Vad_AudioData* pIn, Vad_AudioData* pOut, enum VAD_STATE* state);
 
 #ifdef __cplusplus
 }
