@@ -196,8 +196,8 @@ func TestBaseCase(t *testing.T) {
 	}
 	recvCon := NewConnection(&recvCfg)
 	defer recvCon.Release()
-	recvCon.SetParameters("{\"rtc.video.playout_delay_max\": 250," +
-		"\"rtc.video.broadcaster_playout_delay_max\": 250}")
+	recvCon.SetParameters("{\"rtc.video.playout_delay_max\": 250}")
+	recvCon.SetParameters("{\"rtc.video.broadcaster_playout_delay_max\": 250}")
 	recvCon.Connect("", "lhzuttest", "222")
 	timer := time.NewTimer(10 * time.Second)
 	for *recvAudio == false || *recvData == false || *recvVideo == false {
@@ -385,10 +385,11 @@ func TestVadCase(t *testing.T) {
 	}()
 
 	vad := NewAudioVad(&AudioVadConfig{
-		StartRecognizeCount: 32,
-		MaxRecognizeCount:   80,
-		ActivePercent:       0.6,
-		InactivePercent:     0.2,
+		StartRecognizeCount:    10,
+		StopRecognizeCount:     6,
+		PreStartRecognizeCount: 10,
+		ActivePercent:          0.6,
+		InactivePercent:        0.2,
 	})
 	defer vad.Release()
 	recvCfg := RtcConnectionConfig{
