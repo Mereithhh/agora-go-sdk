@@ -358,7 +358,7 @@ func TestVadCase(t *testing.T) {
 	waitSenderStop.Add(1)
 	go func() {
 		defer waitSenderStop.Done()
-		file, err := os.Open("../../test_data/vad_test.pcm")
+		file, err := os.Open("../../test_data/demo.raw")
 		if err != nil {
 			fmt.Println("Error opening file:", err)
 			return
@@ -444,6 +444,7 @@ func TestVadCase(t *testing.T) {
 	recvCon.Connect("", "lhzuttest", "222")
 
 	waitSenderStop.Wait()
+	time.Sleep(5 * time.Second)
 	senderCon.Disconnect()
 	recvCon.Disconnect()
 }
@@ -620,5 +621,241 @@ func TestSubAudio(t *testing.T) {
 		senderCons[i].Disconnect()
 		senderCons[i].Release()
 	}
+	recvCon.Disconnect()
+}
+
+func TestReconnect(t *testing.T) {
+	// Test code here
+	t.Log("Test case executed")
+	svcCfg := AgoraServiceConfig{
+		AppId: "aab8b8f5a8cd4469a63042fcfafe7063",
+	}
+	Init(&svcCfg)
+	connectedSignal := make(chan struct{}, 1)
+	senderCfg := RtcConnectionConfig{
+		SubAudio:       true,
+		SubVideo:       true,
+		ClientRole:     1,
+		ChannelProfile: 1,
+		ConnectionHandler: &RtcConnectionEventHandler{
+			OnConnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Connected")
+				connectedSignal <- struct{}{}
+			},
+			OnDisconnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Disconnected")
+			},
+		},
+	}
+	con := NewConnection(&senderCfg)
+	defer con.Release()
+	con.Connect("", "lhzuttestreconnect", "111")
+
+	select {
+	case <-connectedSignal:
+	case <-time.After(10 * time.Second):
+		t.Error("connect timeout")
+		t.Fail()
+	}
+
+	con.Disconnect()
+
+	con.Connect("", "lhzuttestreconnect", "111")
+
+	select {
+	case <-connectedSignal:
+	case <-time.After(10 * time.Second):
+		t.Error("connect timeout")
+		t.Fail()
+	}
+
+	con.Disconnect()
+}
+
+func TestVad1(t *testing.T) {
+	agoraVad := NewAudioVad(&AudioVadConfig{
+		StartRecognizeCount:    10,
+		StopRecognizeCount:     6,
+		PreStartRecognizeCount: 10,
+		ActivePercent:          0.6,
+		InactivePercent:        0.2,
+	})
+	defer agoraVad.Release()
+	f, err := os.ReadFile("../../test_data/demo.raw")
+	if err != nil {
+		t.Error(err)
+	}
+	for len(f) > 0 {
+		dataSize := 320
+		if len(f) < dataSize {
+			break
+		} else {
+			data := f[:dataSize]
+			f = f[dataSize:]
+			out, ret := agoraVad.ProcessPcmFrame(&PcmAudioFrame{
+				Data:              data,
+				SampleRate:        16000,
+				NumberOfChannels:  1,
+				BytesPerSample:    2,
+				SamplesPerChannel: 160,
+			})
+			t.Log(ret, len(out.Data))
+		}
+	}
+}
+
+func TestConnLost(t *testing.T) {
+	// Test code here
+	t.Log("Test case executed")
+	svcCfg := AgoraServiceConfig{
+		AppId: "aab8b8f5a8cd4469a63042fcfafe6666",
+	}
+	Init(&svcCfg)
+	defer Destroy()
+
+	connectedSignal := make(chan struct{}, 1)
+	senderCfg := RtcConnectionConfig{
+		SubAudio:       true,
+		SubVideo:       true,
+		ClientRole:     1,
+		ChannelProfile: 1,
+		ConnectionHandler: &RtcConnectionEventHandler{
+			OnConnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Connected")
+				connectedSignal <- struct{}{}
+			},
+			OnDisconnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Disconnected ", reason)
+			},
+			OnConnectionLost: func(con *RtcConnection, info *RtcConnectionInfo) {
+				t.Log("sender ConnectionLost")
+			},
+			OnConnectionFailure: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender ConnectionFailure ", reason)
+			},
+		},
+	}
+	con := NewConnection(&senderCfg)
+	defer con.Release()
+	con.Connect("", "lhzuttestreconnect", "111")
+
+	select {
+	case <-connectedSignal:
+		t.Fail()
+	case <-time.After(10 * time.Second):
+		t.Log("connect timeout")
+	}
+
+	con.Disconnect()
+}
+
+func TestUserInfoUpdated(t *testing.T) {
+	// Test code here
+	t.Log("Test case executed")
+	svcCfg := AgoraServiceConfig{
+		AppId:         "aab8b8f5a8cd4469a63042fcfafe7063",
+		AudioScenario: AUDIO_SCENARIO_CHORUS,
+		LogPath:       "./agora_rtc_log/agorasdk.log",
+		LogSize:       512 * 1024,
+	}
+	Init(&svcCfg)
+	senderCfg := RtcConnectionConfig{
+		SubAudio:       false,
+		SubVideo:       false,
+		ClientRole:     1,
+		ChannelProfile: 1,
+		ConnectionHandler: &RtcConnectionEventHandler{
+			OnConnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Connected")
+			},
+			OnDisconnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("sender Disconnected")
+			},
+		},
+	}
+	senderCon := NewConnection(&senderCfg)
+	defer senderCon.Release()
+	sender := senderCon.NewPcmSender()
+	defer sender.Release()
+	senderCon.Connect("", "lhzuttest", "111")
+	sender.Start()
+	var stopSend *bool = new(bool)
+	*stopSend = false
+	waitSenderStop := &sync.WaitGroup{}
+	waitSenderStop.Add(1)
+	go func() {
+		defer waitSenderStop.Done()
+		data := make([]byte, 320)
+		for !*stopSend {
+			sender.SendPcmData(&PcmAudioFrame{
+				Data:              data,
+				Timestamp:         0,
+				SamplesPerChannel: 160,
+				BytesPerSample:    2,
+				NumberOfChannels:  1,
+				SampleRate:        16000,
+			})
+			time.Sleep(10 * time.Millisecond)
+		}
+		sender.Stop()
+	}()
+
+	waitSenderJoin := make(chan struct{}, 1)
+	audioMuteState := make(chan int, 1)
+	recvCfg := RtcConnectionConfig{
+		SubAudio:       true,
+		SubVideo:       true,
+		ClientRole:     2,
+		ChannelProfile: 1,
+		ConnectionHandler: &RtcConnectionEventHandler{
+			OnConnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("recver Connected")
+			},
+			OnDisconnected: func(con *RtcConnection, info *RtcConnectionInfo, reason int) {
+				t.Log("recver Disconnected")
+			},
+			OnUserJoined: func(con *RtcConnection, uid string) {
+				t.Log("user joined, " + uid)
+				waitSenderJoin <- struct{}{}
+			},
+			OnUserLeft: func(con *RtcConnection, uid string, reason int) {
+				t.Log("user left, " + uid)
+			},
+			OnUserInfoUpdated: func(con *RtcConnection, uid string, mediaInfo int, val int) {
+				t.Logf("user info updated, user %s, info %d, value %d\n", uid, mediaInfo, val)
+				if uid == "111" && mediaInfo == USER_MEDIA_INFO_MUTE_AUDIO {
+					audioMuteState <- val
+				}
+			},
+		},
+	}
+	recvCon := NewConnection(&recvCfg)
+	defer recvCon.Release()
+	recvCon.SetParameters("{\"rtc.video.playout_delay_max\": 250}")
+	recvCon.SetParameters("{\"rtc.video.broadcaster_playout_delay_max\": 250}")
+	recvCon.Connect("", "lhzuttest", "222")
+	select {
+	case val, _ := <-audioMuteState:
+		if val != 0 {
+			t.Fail()
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("wait audio mute state timeout")
+		t.Fail()
+	}
+	*stopSend = true
+	waitSenderStop.Wait()
+
+	select {
+	case val, _ := <-audioMuteState:
+		if val != 1 {
+			t.Fail()
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("wait audio mute state timeout")
+		t.Fail()
+	}
+
+	senderCon.Disconnect()
 	recvCon.Disconnect()
 }
